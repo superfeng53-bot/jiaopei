@@ -70,6 +70,7 @@ export default function FeedbackWizard() {
   const [error, setError] = useState<string | null>(null);
 
   // Data State
+  const [students, setStudents] = useState<Student[]>(SAMPLE_STUDENTS);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [customStudentName, setCustomStudentName] = useState('');
   const [historicalContext, setHistoricalContext] = useState('');
@@ -83,7 +84,8 @@ export default function FeedbackWizard() {
   const [ratings, setRatings] = useState<Record<string, { aiLevels: number[]; customDimension: string; customLevel: number | null }>>({});
   const [performance, setPerformance] = useState('专注投入，课堂互动良好');
   const [homework, setHomework] = useState('完成课后练习，复习本次核心知识点');
-  const [finalReport, setFinalReport] = useState('');
+  const [reportVersions, setReportVersions] = useState<string[]>([]);
+  const [currentVersionIndex, setCurrentVersionIndex] = useState(0);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
@@ -173,8 +175,13 @@ export default function FeedbackWizard() {
 
   const handleGenerate = async (isRegen = false) => {
     if (!selectedStudent && !customStudentName) return;
-    if (isRegen) setIsRegenerating(true);
-    else setLoading(true);
+    
+    if (!isRegen) {
+      setStep('result');
+      setLoading(true);
+    } else {
+      setIsRegenerating(true);
+    }
     setError(null);
 
     const data: FeedbackData = {
@@ -222,10 +229,16 @@ export default function FeedbackWizard() {
 
     try {
       const report = await generateFeedbackReport(data);
-      setFinalReport(report);
-      setStep('result');
+      setReportVersions(prev => {
+        const next = [...prev, report];
+        setCurrentVersionIndex(next.length - 1);
+        return next;
+      });
     } catch (err: any) {
       setError(err.message || '报告生成失败');
+      if (!isRegen && reportVersions.length === 0) {
+        setStep('rating');
+      }
     } finally {
       setLoading(false);
       setIsRegenerating(false);
@@ -233,17 +246,28 @@ export default function FeedbackWizard() {
   };
 
   const copyToClipboard = () => {
+    const currentText = reportVersions[currentVersionIndex];
+    if (!currentText) return;
+
     const handleSuccess = () => {
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
+      
+      // Save to history when copied
+      if (selectedStudent) {
+        const updatedRecords = [currentText, ...(selectedStudent.historyRecords || [])].slice(0, 3);
+        const updatedStudent = { ...selectedStudent, historyRecords: updatedRecords };
+        setSelectedStudent(updatedStudent);
+        setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
+      }
     };
 
     if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(finalReport)
+      navigator.clipboard.writeText(currentText)
         .then(handleSuccess)
-        .catch(() => fallbackCopy(finalReport, handleSuccess));
+        .catch(() => fallbackCopy(currentText, handleSuccess));
     } else {
-      fallbackCopy(finalReport, handleSuccess);
+      fallbackCopy(currentText, handleSuccess);
     }
   };
 
@@ -272,7 +296,7 @@ export default function FeedbackWizard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {SAMPLE_STUDENTS.map(s => (
+        {students.map(s => (
           <button
             key={s.id}
             onClick={() => {
@@ -326,7 +350,7 @@ export default function FeedbackWizard() {
         <button
           disabled={!selectedStudent && !customStudentName}
           onClick={() => setStep('upload')}
-          className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           下一步 <ChevronRight className="w-4 h-4" />
         </button>
@@ -343,7 +367,7 @@ export default function FeedbackWizard() {
 
       <div 
         onClick={() => fileInputRef.current?.click()}
-        className="border-2 border-dashed border-gray-200 rounded-2xl p-12 text-center hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer group"
+        className="border-2 border-dashed border-gray-200 rounded-2xl p-6 sm:p-12 text-center hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer group"
       >
         <input 
           type="file" 
@@ -369,10 +393,10 @@ export default function FeedbackWizard() {
         </div>
       )}
 
-      <div className="flex justify-between">
+      <div className="flex flex-col-reverse sm:flex-row justify-between gap-3">
         <button
           onClick={() => setStep('student')}
-          className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold transition-colors"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold transition-colors"
         >
           <ChevronLeft className="w-4 h-4" /> 上一步
         </button>
@@ -464,17 +488,17 @@ export default function FeedbackWizard() {
         </button>
       </div>
 
-      <div className="flex justify-between pt-4">
+      <div className="flex flex-col-reverse sm:flex-row justify-between gap-3 pt-4">
         <button
           onClick={() => setStep('upload')}
-          className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold transition-colors"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold transition-colors"
         >
           <ChevronLeft className="w-4 h-4" /> 上一步
         </button>
         <button
           disabled={loading || selectedPointIds.size === 0}
           onClick={handleConfirmPoints}
-          className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
           确认并下一步 <ChevronRight className="w-4 h-4" />
@@ -585,13 +609,13 @@ export default function FeedbackWizard() {
                               className="overflow-hidden"
                             >
                               <div className="mt-4 pt-4 border-t border-blue-100/50">
-                                <div className="flex flex-wrap gap-2">
+                                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
                                   {opt.levels.map((level, lIdx) => (
                                     <button
                                       key={lIdx}
                                       onClick={() => updateAILevel(kp.id, originalIdx, lIdx)}
                                       className={cn(
-                                        "flex-1 min-w-[100px] py-2.5 px-3 text-[11px] font-bold rounded-xl transition-all duration-200 leading-tight text-center",
+                                        "py-2.5 px-2 text-[10px] sm:text-[11px] font-bold rounded-xl transition-all duration-200 leading-tight text-center flex items-center justify-center",
                                         rating.aiLevels[originalIdx] === lIdx
                                           ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-100 transform scale-[1.02]"
                                           : "bg-white text-gray-500 border border-gray-100 hover:border-blue-200 hover:text-blue-600 hover:shadow-sm"
@@ -707,17 +731,17 @@ export default function FeedbackWizard() {
           </div>
         </div>
 
-        <div className="flex justify-between">
+        <div className="flex flex-col-reverse sm:flex-row justify-between gap-3">
           <button
             onClick={() => setStep('points')}
-            className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold transition-colors"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold transition-colors"
           >
             <ChevronLeft className="w-4 h-4" /> 上一步
           </button>
           <button
             disabled={loading}
-            onClick={handleGenerate}
-            className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg shadow-blue-200"
+            onClick={() => handleGenerate(false)}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg shadow-blue-200"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
             生成反馈报告
@@ -727,41 +751,80 @@ export default function FeedbackWizard() {
     );
   };
 
-  const renderResultStep = () => (
-    <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold text-gray-900">生成成功！</h2>
-        <p className="text-gray-500">这是为您生成的课后反馈，您可以直接复制使用</p>
-      </div>
-
-      <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 relative group">
-        <div className="prose prose-blue max-w-none overflow-auto max-h-[500px] text-sm">
-          <pre className="whitespace-pre-wrap font-sans text-gray-800 leading-relaxed">
-            {finalReport}
-          </pre>
+  const renderResultStep = () => {
+    if (loading && reportVersions.length === 0) {
+      return (
+        <div className="space-y-6 py-16 text-center">
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto" />
+          <h2 className="text-2xl font-bold text-gray-900">正在生成专属反馈...</h2>
+          <p className="text-gray-500">AI 正在深度分析课堂表现与知识点掌握情况，请稍候</p>
         </div>
-        <div className="absolute top-4 right-4 flex gap-2">
-          <div className="relative">
-            <AnimatePresence>
-              {copySuccess && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.8 }}
-                  animate={{ opacity: 1, y: -40, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  className="absolute left-1/2 -translate-x-1/2 px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-full shadow-lg whitespace-nowrap"
-                >
-                  复制成功！
-                </motion.div>
-              )}
-            </AnimatePresence>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold text-gray-900">生成成功！</h2>
+          <p className="text-gray-500">这是为您生成的课后反馈，您可以直接修改并复制使用</p>
+        </div>
+
+        {reportVersions.length > 1 && (
+          <div className="flex items-center justify-center gap-4 mb-2">
             <button 
-              onClick={copyToClipboard}
-              className="p-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 text-blue-600 transition-all"
-              title="复制到剪贴板"
+              disabled={currentVersionIndex === 0} 
+              onClick={() => setCurrentVersionIndex(i => i - 1)}
+              className="p-1.5 rounded-md hover:bg-gray-100 disabled:opacity-30 transition-colors"
             >
-              <Copy className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <span className="text-sm font-bold text-blue-700 bg-blue-50 px-4 py-1.5 rounded-full">
+              版本 {currentVersionIndex + 1} / {reportVersions.length}
+            </span>
+            <button 
+              disabled={currentVersionIndex === reportVersions.length - 1} 
+              onClick={() => setCurrentVersionIndex(i => i + 1)}
+              className="p-1.5 rounded-md hover:bg-gray-100 disabled:opacity-30 transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
+        )}
+
+        <div className="bg-gray-50 rounded-2xl p-4 sm:p-6 border border-gray-200 relative group flex flex-col">
+          <textarea
+            value={reportVersions[currentVersionIndex] || ''}
+            onChange={(e) => {
+              const newVersions = [...reportVersions];
+              newVersions[currentVersionIndex] = e.target.value;
+              setReportVersions(newVersions);
+            }}
+            className="w-full h-[300px] sm:h-[400px] p-4 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none text-sm leading-relaxed text-gray-800"
+            placeholder="反馈内容..."
+          />
+          
+          <div className="absolute top-6 right-6 sm:top-8 sm:right-8 flex gap-2">
+            <div className="relative">
+              <AnimatePresence>
+                {copySuccess && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.8 }}
+                    animate={{ opacity: 1, y: -40, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    className="absolute left-1/2 -translate-x-1/2 px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-full shadow-lg whitespace-nowrap"
+                  >
+                    复制成功！
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <button 
+                onClick={copyToClipboard}
+                className="p-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 text-blue-600 transition-all"
+                title="复制并采纳此版本"
+              >
+                <Copy className="w-5 h-5" />
+              </button>
+            </div>
             <button 
               disabled={isRegenerating}
               onClick={() => handleGenerate(true)}
@@ -782,28 +845,30 @@ export default function FeedbackWizard() {
                 </span>
               )}
             </button>
+          </div>
+        </div>
+
+        <div className="flex justify-center">
+          <button
+            onClick={() => {
+              setStep('student');
+              setReportVersions([]);
+              setCurrentVersionIndex(0);
+              setRatings({});
+              setKnowledgePoints([]);
+              setUploadedFile(null);
+            }}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all"
+          >
+            开始新反馈
+          </button>
         </div>
       </div>
-
-      <div className="flex justify-center gap-4">
-        <button
-          onClick={() => {
-            setStep('student');
-            setFinalReport('');
-            setRatings({});
-            setKnowledgePoints([]);
-            setUploadedFile(null);
-          }}
-          className="flex items-center gap-2 px-8 py-3 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all"
-        >
-          开始新反馈
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
-    <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-xl shadow-blue-100/50 overflow-hidden border border-gray-100">
+    <div className="max-w-4xl mx-auto bg-white rounded-2xl sm:rounded-3xl shadow-xl shadow-blue-100/50 overflow-hidden border border-gray-100">
       {/* Progress Bar */}
       <div className="h-2 bg-gray-100 flex">
         {['student', 'upload', 'points', 'rating', 'result'].map((s, i) => {
@@ -821,7 +886,7 @@ export default function FeedbackWizard() {
         })}
       </div>
 
-      <div className="p-8 sm:p-12">
+      <div className="p-4 sm:p-12">
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
