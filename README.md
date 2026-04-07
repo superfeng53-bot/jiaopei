@@ -54,3 +54,92 @@ npm run build
 *   **图标**：Lucide React
 *   **AI 集成**：Google Generative AI SDK + OpenAI 兼容接口
 *   **文件解析**：pdfjs-dist, mammoth
+
+## 公网服务器部署指南
+
+本项目是一个纯前端的单页面应用 (SPA)，构建后生成静态文件，可以部署在任何支持静态文件托管的 Web 服务器上（如 Nginx、Apache）或使用 Docker 部署。
+
+### 方案一：使用 Nginx 部署（推荐）
+
+**1. 准备工作**
+确保您的公网服务器（如 Ubuntu/CentOS）已安装 Node.js (推荐 v18+) 和 Nginx。
+
+**2. 获取代码并构建**
+```bash
+# 克隆或上传代码到服务器
+cd /path/to/your/project
+
+# 安装依赖
+npm install
+
+# 构建生产环境静态文件
+npm run build
+```
+构建完成后，项目根目录下会生成一个 `dist` 文件夹，里面包含了所有需要部署的静态文件。
+
+**3. 配置 Nginx**
+编辑 Nginx 配置文件（通常位于 `/etc/nginx/conf.d/yourdomain.conf` 或 `/etc/nginx/sites-available/default`）：
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com; # 替换为您的域名或公网 IP
+
+    # 指向刚才构建生成的 dist 目录的绝对路径
+    root /path/to/your/project/dist; 
+    index index.html;
+
+    # SPA 路由回退配置，防止刷新 404
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 可选：开启 gzip 压缩提高加载速度
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+}
+```
+
+**4. 启动/重启 Nginx**
+```bash
+# 测试配置是否正确
+sudo nginx -t
+
+# 重启 Nginx 使配置生效
+sudo systemctl restart nginx
+```
+
+### 方案二：使用 Docker 部署
+
+如果您更喜欢使用 Docker，可以通过 Nginx 镜像快速部署。
+
+**1. 创建 Dockerfile**
+在项目根目录创建一个名为 `Dockerfile` 的文件：
+```dockerfile
+# 构建阶段
+FROM node:18-alpine as builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# 运行阶段
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+# 覆盖默认的 nginx 配置以支持 SPA 路由
+RUN echo 'server { listen 80; location / { root /usr/share/nginx/html; index index.html; try_files $uri $uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+**2. 构建并运行容器**
+```bash
+# 构建 Docker 镜像
+docker build -t feedback-assistant .
+
+# 运行容器，将容器的 80 端口映射到宿主机的 80 端口
+docker run -d -p 80:80 --name feedback-app feedback-assistant
+```
+
+部署完成后，您就可以通过服务器的公网 IP 或绑定的域名访问该系统了。由于 API Key 是在浏览器端（客户端）直接发起的请求，因此不需要在服务器端额外配置环境变量，用户在界面右上角的“设置”中配置即可。
