@@ -15,7 +15,8 @@ import {
   File as FileIcon,
   Copy,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Eraser
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { parseFile } from '../lib/fileParser';
@@ -56,9 +57,9 @@ export default function FeedbackWizard() {
   const [courseSummary, setCourseSummary] = useState('');
   const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePoint[]>([]);
   const [selectedPointIds, setSelectedPointIds] = useState<Set<string>>(new Set());
+  const [selectedDimensions, setSelectedDimensions] = useState<Record<string, Set<string>>>({});
   const [performanceTags, setPerformanceTags] = useState<string[]>([]);
-  const [homeworkTags, setHomeworkTags] = useState<string[]>([]);
-  const [ratings, setRatings] = useState<Record<string, { optionId: string; levelIndex: number }[]>>({});
+  const [ratings, setRatings] = useState<Record<string, { aiLevels: number[]; customDimension: string; customLevel: number | null }>>({});
   const [performance, setPerformance] = useState('专注投入，课堂互动良好');
   const [homework, setHomework] = useState('完成课后练习，复习本次核心知识点');
   const [finalReport, setFinalReport] = useState('');
@@ -85,8 +86,11 @@ export default function FeedbackWizard() {
       const analysis = await analyzeCourseContent(parsed.isImage ? parsed.base64! : parsed.text, parsed.isImage);
       setKnowledgePoints(analysis.knowledgePoints);
       setCourseSummary(analysis.summary);
-      // Default select all points initially
-      setSelectedPointIds(new Set(analysis.knowledgePoints.map(p => p.id)));
+      
+      // Default select first 3 points initially
+      const firstThreeIds = analysis.knowledgePoints.slice(0, 3).map(p => p.id);
+      setSelectedPointIds(new Set(firstThreeIds));
+      
       setStep('points');
     } catch (err: any) {
       setError(err.message || '文件解析失败');
@@ -103,6 +107,7 @@ export default function FeedbackWizard() {
     
     try {
       const selectedPoints = knowledgePoints.filter(kp => selectedPointIds.has(kp.id));
+
       const details = await generateDetailedOptions(
         selectedPoints, 
         fileContent.isImage ? fileContent.base64! : fileContent.text, 
@@ -116,14 +121,23 @@ export default function FeedbackWizard() {
       }));
       
       setPerformanceTags(details.performanceTags);
-      setHomeworkTags(details.homeworkTags);
       
-      // Initialize default ratings for selected points
-      const initialRatings: Record<string, { optionId: string; levelIndex: number }[]> = {};
+      // Initialize selected dimensions (default select the first one for each point)
+      const initialDims: Record<string, Set<string>> = {};
       details.knowledgePoints.forEach(kp => {
         if (kp.options && kp.options.length > 0) {
-          initialRatings[kp.id] = [{ optionId: kp.options[0].id, levelIndex: 1 }];
+          initialDims[kp.id] = new Set([kp.options[0].dimension]);
+        } else {
+          initialDims[kp.id] = new Set(['掌握程度']);
         }
+      });
+      setSelectedDimensions(initialDims);
+      
+      // Initialize default ratings for selected points
+      const initialRatings: Record<string, { aiLevels: number[]; customDimension: string; customLevel: number | null }> = {};
+      details.knowledgePoints.forEach(kp => {
+        const numDims = kp.options?.length || 0;
+        initialRatings[kp.id] = { aiLevels: Array(numDims).fill(1), customDimension: '', customLevel: null };
       });
       setRatings(initialRatings);
       
@@ -145,17 +159,38 @@ export default function FeedbackWizard() {
       courseSummary: courseSummary,
       points: knowledgePoints
         .filter(kp => selectedPointIds.has(kp.id))
-        .map(kp => ({
-          point: kp.point,
-          evaluations: (ratings[kp.id] || []).map(r => {
-            const option = kp.options.find(o => o.id === r.optionId);
-            return {
-              optionId: r.optionId,
-              levelIndex: r.levelIndex,
-              text: option?.levels[r.levelIndex] || ''
-            };
-          })
-        })),
+        .map(kp => {
+          const rating = ratings[kp.id];
+          const evaluations: any[] = [];
+          const genericLevels = ['极佳', '较好', '一般', '模糊'];
+          
+          if (kp.options) {
+            kp.options.forEach((opt, idx) => {
+              // Only include if this dimension is selected
+              if (selectedDimensions[kp.id]?.has(opt.dimension)) {
+                const levelIdx = rating.aiLevels[idx];
+                evaluations.push({
+                  optionId: `ai-${idx}`,
+                  levelIndex: levelIdx,
+                  text: `${opt.dimension}：${opt.levels[levelIdx]}`
+                });
+              }
+            });
+          }
+          
+          if (rating.customDimension && rating.customLevel !== null) {
+            evaluations.push({
+              optionId: 'custom',
+              levelIndex: rating.customLevel,
+              text: `${rating.customDimension}：${genericLevels[rating.customLevel]}`
+            });
+          }
+
+          return {
+            point: kp.point,
+            evaluations
+          };
+        }),
       performance,
       homework,
       historicalContext: selectedStudent?.history || historicalContext
@@ -385,17 +420,18 @@ export default function FeedbackWizard() {
             e.stopPropagation();
             const newId = Date.now().toString();
             const defaultOptions: EvaluationOption[] = [
-              { id: 'opt1', levels: ['理解极佳', '理解较好', '理解一般', '理解模糊'] },
-              { id: 'opt2', levels: ['应用熟练', '应用较好', '应用一般', '应用生疏'] },
-              { id: 'opt3', levels: ['细节完美', '细节到位', '细节疏漏', '细节较多错误'] },
-              { id: 'opt4', levels: ['逻辑严密', '逻辑清晰', '逻辑一般', '逻辑混乱'] },
+              { dimension: '核心概念理解与应用', levels: ['理解透彻应用自如', '理解清晰基本准确', '理解尚可偶有偏差', '理解模糊需加深印象'] },
+              { dimension: '解题逻辑与思维严密性', levels: ['逻辑严密无懈可击', '逻辑清晰过程完整', '逻辑欠严密有小疏漏', '逻辑混乱错误较多'] },
+              { dimension: '实验现象观察与描述', levels: ['观察细致描述科学', '观察到位描述准确', '观察不全描述欠妥', '观察缺失描述错误'] },
+              { dimension: '计算准确度与单位规范', levels: ['计算精准书写规范', '计算准确基本规范', '计算有误书写不全', '计算混乱错误频发'] }
             ];
-            setKnowledgePoints([...knowledgePoints, { id: newId, point: '自定义知识点', description: '描述教学目标', options: defaultOptions }]);
+            const potentialDimensions = ['核心概念', '解题逻辑', '实验现象', '计算准确度'];
+            setKnowledgePoints([...knowledgePoints, { id: newId, point: '自定义知识点', description: '描述教学目标', options: defaultOptions, potentialDimensions }]);
             const newIds = new Set(selectedPointIds);
             newIds.add(newId);
             setSelectedPointIds(newIds);
             // Initialize rating for the new point
-            setRatings({ ...ratings, [newId]: [{ optionId: 'opt1', levelIndex: 1 }] });
+            setRatings({ ...ratings, [newId]: { aiLevels: [1, 1, 1, 1], customDimension: '', customLevel: null } });
           }}
           className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 hover:text-blue-500 hover:border-blue-200 transition-all flex items-center justify-center gap-2"
         >
@@ -425,113 +461,187 @@ export default function FeedbackWizard() {
   const renderRatingStep = () => {
     const selectedPoints = knowledgePoints.filter(kp => selectedPointIds.has(kp.id));
     
-    const toggleOption = (kpId: string, optionId: string, index: number) => {
-      const current = ratings[kpId] || [];
-      const exists = current.find(r => r.optionId === optionId);
-      
-      if (exists) {
-        setRatings({ ...ratings, [kpId]: current.filter(r => r.optionId !== optionId) });
-      } else {
-        // Default level: 1 (Good) for first two, 2 (Average) for last two
-        const defaultLevel = index < 2 ? 1 : 2;
-        setRatings({ ...ratings, [kpId]: [...current, { optionId, levelIndex: defaultLevel }] });
-      }
-    };
-
-    const updateLevel = (kpId: string, optionId: string, levelIndex: number) => {
-      const current = ratings[kpId] || [];
-      setRatings({
-        ...ratings,
-        [kpId]: current.map(r => r.optionId === optionId ? { ...r, levelIndex } : r)
+    const updateAILevel = (kpId: string, dimIdx: number, levelIndex: number) => {
+      setRatings(prev => {
+        const current = prev[kpId] || { aiLevels: [], customDimension: '', customLevel: null };
+        const newLevels = [...current.aiLevels];
+        newLevels[dimIdx] = levelIndex;
+        return {
+          ...prev,
+          [kpId]: { ...current, aiLevels: newLevels }
+        };
       });
     };
 
-    const LEVEL_LABELS = ['极佳', '较好', '一般', '模糊'];
+    const updateCustomDimension = (kpId: string, dimension: string) => {
+      setRatings(prev => ({
+        ...prev,
+        [kpId]: { ...prev[kpId], customDimension: dimension }
+      }));
+    };
+
+    const updateCustomLevel = (kpId: string, levelIndex: number) => {
+      setRatings(prev => ({
+        ...prev,
+        [kpId]: { ...prev[kpId], customLevel: levelIndex }
+      }));
+    };
+
+    const GENERIC_LEVELS = ['极佳', '较好', '一般', '模糊'];
 
     return (
       <div className="space-y-8">
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-bold text-gray-900">课堂评价</h2>
-          <p className="text-gray-500">点击按钮选择评价维度，并调节掌握程度</p>
+          <p className="text-gray-500">针对每个知识点，从多个维度评价掌握程度</p>
         </div>
 
         <div className="space-y-10">
-          {selectedPoints.map((kp, idx) => (
-            <div key={kp.id} className="space-y-4 p-6 rounded-2xl border border-gray-100 bg-white shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">知识点 {idx + 1}</span>
-                <h3 className="font-bold text-gray-900">{kp.point}</h3>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {kp.options?.map((opt, optIdx) => {
-                  const selection = (ratings[kp.id] || []).find(r => r.optionId === opt.id);
-                  const isActive = !!selection;
-                  
-                  return (
-                    <div key={opt.id} className="space-y-2">
-                      <button
-                        onClick={() => toggleOption(kp.id, opt.id, optIdx)}
+          {selectedPoints.map((kp, idx) => {
+            const rating = ratings[kp.id] || { aiLevels: [], customDimension: '', customLevel: null };
+            
+            return (
+              <div key={kp.id} className="space-y-6 p-6 rounded-2xl border border-gray-100 bg-white shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">知识点 {idx + 1}</span>
+                  <h3 className="font-bold text-gray-900">{kp.point}</h3>
+                </div>
+                
+                <div className="space-y-6">
+                <div className="space-y-4">
+                  {kp.options && kp.options.map((opt, optIdx) => {
+                    const isDimSelected = selectedDimensions[kp.id]?.has(opt.dimension);
+                    const originalIdx = kp.options!.findIndex(o => o.dimension === opt.dimension);
+                    
+                    return (
+                      <div 
+                        key={opt.dimension} 
                         className={cn(
-                          "w-full py-3 px-4 rounded-xl border-2 transition-all text-left flex justify-between items-center group",
-                          isActive 
-                            ? "bg-blue-50 border-blue-500 text-blue-700 shadow-sm" 
-                            : "border-gray-100 text-gray-500 hover:border-blue-200 hover:bg-gray-50"
+                          "p-4 rounded-2xl border transition-all duration-300",
+                          isDimSelected 
+                            ? "bg-blue-50/50 border-blue-200 shadow-sm" 
+                            : "bg-gray-50/30 border-gray-100 hover:border-gray-200"
                         )}
                       >
-                        <span className="font-medium truncate mr-2">
-                          {isActive ? opt.levels[selection.levelIndex] : opt.levels[1]}
-                        </span>
-                        <div className={cn(
-                          "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
-                          isActive ? "bg-blue-500 border-blue-500" : "border-gray-300 group-hover:border-blue-400"
-                        )}>
-                          {isActive && <CheckCircle2 className="w-3 h-3 text-white" />}
+                        <button
+                          onClick={() => {
+                            const newDims = new Set(selectedDimensions[kp.id]);
+                            if (isDimSelected) {
+                              if (newDims.size > 1) newDims.delete(opt.dimension);
+                            } else {
+                              newDims.add(opt.dimension);
+                            }
+                            setSelectedDimensions({ ...selectedDimensions, [kp.id]: newDims });
+                          }}
+                          className="flex items-center gap-3 w-full text-left group"
+                        >
+                          <div className={cn(
+                            "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200",
+                            isDimSelected 
+                              ? "bg-blue-600 border-blue-600 shadow-sm" 
+                              : "border-gray-300 group-hover:border-blue-400"
+                          )}>
+                            {isDimSelected && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                          </div>
+                          <span className={cn(
+                            "text-sm font-bold transition-colors",
+                            isDimSelected ? "text-blue-900" : "text-gray-500"
+                          )}>
+                            {opt.dimension}
+                          </span>
+                        </button>
+
+                        <AnimatePresence>
+                          {isDimSelected && (
+                            <motion.div 
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="mt-4 pt-4 border-t border-blue-100/50">
+                                <div className="flex flex-wrap gap-2">
+                                  {opt.levels.map((level, lIdx) => (
+                                    <button
+                                      key={lIdx}
+                                      onClick={() => updateAILevel(kp.id, originalIdx, lIdx)}
+                                      className={cn(
+                                        "flex-1 min-w-[100px] py-2.5 px-3 text-[11px] font-bold rounded-xl transition-all duration-200 leading-tight text-center",
+                                        rating.aiLevels[originalIdx] === lIdx
+                                          ? "bg-blue-600 text-white shadow-md ring-2 ring-blue-100 transform scale-[1.02]"
+                                          : "bg-white text-gray-500 border border-gray-100 hover:border-blue-200 hover:text-blue-600 hover:shadow-sm"
+                                      )}
+                                    >
+                                      {level}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                  {/* Custom Dimension */}
+                  <div className="space-y-3 pt-4 border-t border-gray-50">
+                    <div className="text-sm font-bold text-gray-700">自定义评价维度 (可选)</div>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <input
+                        type="text"
+                        placeholder="例如：书写规范、计算速度..."
+                        value={rating.customDimension}
+                        onChange={e => updateCustomDimension(kp.id, e.target.value)}
+                        className="flex-1 p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                      />
+                      {rating.customDimension && (
+                        <div className="flex gap-1 p-1 bg-gray-50 rounded-lg border border-gray-100 shrink-0">
+                          {GENERIC_LEVELS.map((label, lIdx) => (
+                            <button
+                              key={label}
+                              onClick={() => updateCustomLevel(kp.id, lIdx)}
+                              className={cn(
+                                "px-3 py-1.5 text-[10px] font-bold rounded-md transition-all",
+                                rating.customLevel === lIdx
+                                  ? "bg-white text-blue-600 shadow-sm ring-1 ring-blue-100"
+                                  : "text-gray-400 hover:text-gray-600"
+                              )}
+                            >
+                              {label}
+                            </button>
+                          ))}
                         </div>
-                      </button>
-
-                      <AnimatePresence>
-                        {isActive && (
-                          <motion.div 
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="flex gap-1 p-1 bg-gray-50 rounded-lg border border-gray-100">
-                              {LEVEL_LABELS.map((label, lIdx) => (
-                                <button
-                                  key={label}
-                                  onClick={() => updateLevel(kp.id, opt.id, lIdx)}
-                                  className={cn(
-                                    "flex-1 py-1.5 text-[10px] font-bold rounded-md transition-all",
-                                    selection.levelIndex === lIdx
-                                      ? "bg-white text-blue-600 shadow-sm ring-1 ring-blue-100"
-                                      : "text-gray-400 hover:text-gray-600"
-                                  )}
-                                >
-                                  {label}
-                                </button>
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                      )}
                     </div>
-                  );
-                })}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
-          <div className="space-y-4 pt-4 border-t border-gray-100">
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700">课堂表现评价 (点击按钮快速选择)</label>
+          <div className="space-y-6 pt-4 border-t border-gray-100">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-bold text-gray-700">课堂表现评价 (点击标签快速添加)</label>
+                <button 
+                  onClick={() => setPerformance('')}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+                  title="清空内容"
+                >
+                  <Eraser className="w-3 h-3" /> 清空
+                </button>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {(performanceTags.length > 0 ? performanceTags : ['专注投入', '互动积极', '思维活跃', '状态稳定', '稍有分心', '需更主动']).map(tag => (
+                {(performanceTags.length > 0 ? performanceTags : [
+                  '全程专注投入', '学习态度认真', '紧跟授课节奏', '积极思考回答', 
+                  '主动表达疑问', '吸收速度快', '知识应用力强', '笔记详实工整', 
+                  '执行力非常强', '思维活跃敏捷', '需加强记忆复盘', '解题速度待提高'
+                ]).map(tag => (
                   <button
                     key={tag}
-                    onClick={() => setPerformance(prev => prev.includes(tag) ? prev : `${prev}，${tag}`)}
+                    onClick={() => setPerformance(prev => prev.includes(tag) ? prev : (prev ? `${prev}，${tag}` : tag))}
                     className={cn(
                       "px-3 py-1.5 rounded-full text-xs transition-colors",
                       performance.includes(tag) 
@@ -546,32 +656,27 @@ export default function FeedbackWizard() {
               <textarea
                 value={performance}
                 onChange={e => setPerformance(e.target.value)}
-                className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none h-20 text-sm"
+                placeholder="请输入课堂表现评价..."
+                className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none h-32 text-sm leading-relaxed"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700">课后作业建议</label>
-              <div className="flex flex-wrap gap-2">
-                {(homeworkTags.length > 0 ? homeworkTags : ['完成专项习题', '复习核心公式', '整理错题本', '预习下节课', '背诵方程式']).map(tag => (
-                  <button
-                    key={tag}
-                    onClick={() => setHomework(prev => prev.includes(tag) ? prev : `${prev}，${tag}`)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-full text-xs transition-colors",
-                      homework.includes(tag) 
-                        ? "bg-blue-600 text-white" 
-                        : "bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-600"
-                    )}
-                  >
-                    {tag}
-                  </button>
-                ))}
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-bold text-gray-700">课后作业建议</label>
+                <button 
+                  onClick={() => setHomework('')}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+                  title="清空内容"
+                >
+                  <Eraser className="w-3 h-3" /> 清空
+                </button>
               </div>
               <textarea
                 value={homework}
                 onChange={e => setHomework(e.target.value)}
-                className="w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none h-20 text-sm"
+                placeholder="请输入课后作业建议..."
+                className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none h-32 text-sm leading-relaxed"
               />
             </div>
           </div>
@@ -585,7 +690,7 @@ export default function FeedbackWizard() {
             <ChevronLeft className="w-4 h-4" /> 上一步
           </button>
           <button
-            disabled={loading || selectedPoints.some(kp => !ratings[kp.id] || ratings[kp.id].length === 0)}
+            disabled={loading}
             onClick={handleGenerate}
             className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg shadow-blue-200"
           >

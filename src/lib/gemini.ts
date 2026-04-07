@@ -2,15 +2,16 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { getAIConfig } from "./aiConfig";
 
 export interface EvaluationOption {
-  id: string;
-  levels: [string, string, string, string]; // 4 levels of intensity/degree
+  dimension: string;
+  levels: [string, string, string, string]; // 4 specific levels for this dimension
 }
 
 export interface KnowledgePoint {
   id: string;
   point: string;
   description: string;
-  options?: EvaluationOption[]; // Optional, generated in stage 2
+  potentialDimensions?: string[]; // Potential dimensions to choose from
+  options?: EvaluationOption[]; // 4 dimensions with levels (final)
 }
 
 export interface CourseAnalysis {
@@ -19,9 +20,8 @@ export interface CourseAnalysis {
 }
 
 export interface DetailedAnalysis {
-  knowledgePoints: KnowledgePoint[]; // Updated with options
+  knowledgePoints: KnowledgePoint[];
   performanceTags: string[];
-  homeworkTags: string[];
 }
 
 export interface SelectedOption {
@@ -131,7 +131,8 @@ export async function analyzeCourseContent(content: string, isImage: boolean = f
     
     任务：
     1. 提取 8-12 个细致的知识点（用于后续详细评价）。
-    2. 为本次课程撰写一个精炼的“课堂内容汇总”，概括本次课程讲解的核心板块。
+    2. 为每个知识点提供 4-6 个专业的评价维度选项（例如：概念理解深度、方程式书写规范、实验现象分析、计算逻辑严密性等）。
+    3. 为本次课程撰写一个精炼的“课堂内容汇总”，概括本次课程讲解的核心板块。
     
     要求：
     - 汇总条目控制在 2-3 条以内，不要过于琐碎。
@@ -143,7 +144,11 @@ export async function analyzeCourseContent(content: string, isImage: boolean = f
     请务必以 JSON 格式输出，输出格式为：
     {
       "knowledgePoints": [
-        { "point": "知识点名称", "description": "具体的教学要求" }
+        { 
+          "point": "知识点名称", 
+          "description": "具体的教学要求",
+          "potentialDimensions": ["维度1", "维度2", "维度3", "维度4"]
+        }
       ],
       "summary": "1。 核心板块一。 2。 核心板块二。"
     }
@@ -158,9 +163,10 @@ export async function analyzeCourseContent(content: string, isImage: boolean = f
           type: Type.OBJECT,
           properties: {
             point: { type: Type.STRING },
-            description: { type: Type.STRING }
+            description: { type: Type.STRING },
+            potentialDimensions: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: 4, maxItems: 6 }
           },
-          required: ["point", "description"]
+          required: ["point", "description", "potentialDimensions"]
         }
       },
       summary: { type: Type.STRING }
@@ -186,16 +192,16 @@ export async function generateDetailedOptions(
   isImage: boolean = false
 ): Promise<DetailedAnalysis> {
   const prompt = `
-    作为一名极其资深且细致的化学教师，请针对以下选定的知识点，生成专业的评价维度和程度描述。同时生成课堂表现标签和作业建议。
+    作为一名极其资深且细致的化学教师，请针对以下选定的知识点及其【备选评价维度】，为每个维度生成专业的程度标签。
     
-    选定知识点：
-    ${selectedPoints.map(p => `- ${p.point}`).join("\n")}
+    任务：
+    1. 为每个知识点列出的所有【备选维度】生成 4 个反映掌握程度的评价短语（从优到劣）。
+    2. 评价短语应自然、专业且具有针对性，不局限于简单的“优良中差”，可以根据维度内容灵活表述（例如：针对“逻辑严密性”，标签可以是“逻辑严密无误、逻辑清晰基本准确、逻辑欠严密有小疏漏、逻辑混乱错误较多”）。
+    3. 评价短语字数建议在 2-8 个字之间，保持灵活性以确保表达的专业性。
+    4. 生成 12-15 个针对“课堂表现”的专业短标签。
     
-    要求：
-    1. 为每个选定知识点生成 4 个评价维度（例如：理解程度、应用能力、细节掌握、逻辑梳理）。
-    2. 每个维度必须提供 4 个不同程度的描述文本（从优到劣，例如：掌握极佳、掌握较好、掌握一般、掌握模糊）。
-    3. 生成 8-10 个与本次课程内容相关的课堂表现标签。
-    4. 生成 5-8 个具体的课后作业建议。
+    选定内容：
+    ${selectedPoints.map(p => `- 知识点：${p.point}\n  备选维度：${p.potentialDimensions?.join("、")}`).join("\n")}
     
     请务必以 JSON 格式输出，输出格式为：
     {
@@ -203,13 +209,11 @@ export async function generateDetailedOptions(
         { 
           "point": "知识点名称", 
           "options": [
-            { "id": "opt1", "levels": ["极佳文本", "较好文本", "一般文本", "模糊文本"] },
-            ... (共4个维度)
+            { "dimension": "维度名称", "levels": ["优标签", "良标签", "中标签", "差标签"] }
           ]
         }
       ],
-      "performanceTags": [...],
-      "homeworkTags": [...]
+      "performanceTags": ["标签1", "标签2", "..."]
     }
   `;
 
@@ -222,27 +226,24 @@ export async function generateDetailedOptions(
           type: Type.OBJECT,
           properties: {
             point: { type: Type.STRING },
-            options: {
-              type: Type.ARRAY,
+            options: { 
+              type: Type.ARRAY, 
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  id: { type: Type.STRING },
+                  dimension: { type: Type.STRING },
                   levels: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: 4, maxItems: 4 }
                 },
-                required: ["id", "levels"]
-              },
-              minItems: 4,
-              maxItems: 4
+                required: ["dimension", "levels"]
+              }
             }
           },
           required: ["point", "options"]
         }
       },
-      performanceTags: { type: Type.ARRAY, items: { type: Type.STRING } },
-      homeworkTags: { type: Type.ARRAY, items: { type: Type.STRING } }
+      performanceTags: { type: Type.ARRAY, items: { type: Type.STRING } }
     },
-    required: ["knowledgePoints", "performanceTags", "homeworkTags"]
+    required: ["knowledgePoints", "performanceTags"]
   };
 
   const result = await callAI(prompt, 2, undefined, schema, isImage ? content : undefined, isImage ? undefined : content);
@@ -253,16 +254,13 @@ export async function generateDetailedOptions(
       const details = parsed.knowledgePoints.find((dp: any) => dp.point === p.point);
       return {
         ...p,
-        options: details?.options || [
-          { id: 'opt1', levels: ['理解极佳', '理解较好', '理解一般', '理解模糊'] },
-          { id: 'opt2', levels: ['应用熟练', '应用较好', '应用一般', '应用生疏'] },
-          { id: 'opt3', levels: ['细节完美', '细节到位', '细节疏漏', '细节较多错误'] },
-          { id: 'opt4', levels: ['逻辑严密', '逻辑清晰', '逻辑一般', '逻辑混乱'] },
-        ]
+        options: details ? details.options : (p.potentialDimensions || []).map(d => ({
+          dimension: d,
+          levels: ['表现极佳', '表现较好', '表现一般', '表现模糊']
+        }))
       };
     }),
-    performanceTags: parsed.performanceTags || [],
-    homeworkTags: parsed.homeworkTags || []
+    performanceTags: parsed.performanceTags || []
   };
 }
 
