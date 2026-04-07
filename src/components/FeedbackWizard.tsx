@@ -28,12 +28,33 @@ interface Student {
   id: string;
   name: string;
   history: string;
+  historyRecords?: string[]; // Last 3 feedback reports
 }
 
 const SAMPLE_STUDENTS: Student[] = [
-  { id: '1', name: '万麟炫', history: '工艺流程真题逐题精讲，带孩子梳理工艺流程的整体步骤' },
-  { id: '2', name: '吴梓萱', history: '对上节课晶胞及其计算进行了简短复盘，系统梳理了四大晶体' },
-  { id: '3', name: '黄峻崎', history: '醛、酮的结构与性质，并完成了部分羧酸相关内容的教学' },
+  { 
+    id: '1', 
+    name: '万麟炫', 
+    history: '工艺流程真题逐题精讲，带孩子梳理工艺流程的整体步骤',
+    historyRecords: [
+      '万麟炫化学课后反馈，请查收[愉快]\n一，课堂内容\n1。 工艺流程真题精讲。 2。 梳理核心步骤。\n二，课堂表现\n孩子本节课状态积极，全程专注投入。对核心内容的吸收速度快，展现出良好的学习适应性。作业完成质量高，正确率达95%。',
+      '万麟炫化学课后反馈，请查收[愉快]\n一，课堂内容\n1。 沉淀溶解平衡。 2。 溶度积计算。\n二，课堂表现\n学习态度认真，紧跟授课节奏。对于不熟悉的地方会及时批注，求知欲强。目前薄弱点在于计算速度偏慢。'
+    ]
+  },
+  { 
+    id: '2', 
+    name: '吴梓萱', 
+    history: '对上节课晶胞及其计算进行了简短复盘，系统梳理了四大晶体',
+    historyRecords: [
+      '吴梓萱化学课后反馈，请查收[愉快]\n一，课堂内容\n1。 晶胞复盘。 2。 四大晶体梳理。\n二，课堂表现\n课堂互动良好，能紧跟讲解节奏主动思考。经过上节课的梳理，孩子对前期知识熟悉度明显提升。'
+    ]
+  },
+  { 
+    id: '3', 
+    name: '黄峻崎', 
+    history: '醛、酮的结构与性质，并完成了部分羧酸相关内容的教学',
+    historyRecords: []
+  },
 ];
 
 const RATINGS = [
@@ -64,6 +85,7 @@ export default function FeedbackWizard() {
   const [homework, setHomework] = useState('完成课后练习，复习本次核心知识点');
   const [finalReport, setFinalReport] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -149,9 +171,10 @@ export default function FeedbackWizard() {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (isRegen = false) => {
     if (!selectedStudent && !customStudentName) return;
-    setLoading(true);
+    if (isRegen) setIsRegenerating(true);
+    else setLoading(true);
     setError(null);
 
     const data: FeedbackData = {
@@ -193,7 +216,8 @@ export default function FeedbackWizard() {
         }),
       performance,
       homework,
-      historicalContext: selectedStudent?.history || historicalContext
+      historicalContext: selectedStudent?.history || historicalContext,
+      historicalFeedbacks: selectedStudent?.historyRecords
     };
 
     try {
@@ -204,6 +228,7 @@ export default function FeedbackWizard() {
       setError(err.message || '报告生成失败');
     } finally {
       setLoading(false);
+      setIsRegenerating(false);
     }
   };
 
@@ -737,13 +762,26 @@ export default function FeedbackWizard() {
               <Copy className="w-5 h-5" />
             </button>
           </div>
-          <button 
-            onClick={handleGenerate}
-            className="p-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 text-green-600 transition-all"
-            title="重新生成"
-          >
-            <RefreshCw className="w-5 h-5" />
-          </button>
+            <button 
+              disabled={isRegenerating}
+              onClick={() => handleGenerate(true)}
+              className={cn(
+                "p-2 bg-white border border-gray-200 rounded-lg shadow-sm transition-all relative",
+                isRegenerating ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-50 text-green-600"
+              )}
+              title="重新生成"
+            >
+              {isRegenerating ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-5 h-5" />
+              )}
+              {isRegenerating && (
+                <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] font-bold text-green-600 whitespace-nowrap">
+                  正在重新生成...
+                </span>
+              )}
+            </button>
         </div>
       </div>
 

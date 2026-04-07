@@ -40,6 +40,7 @@ export interface FeedbackData {
   performance: string;
   homework: string;
   historicalContext?: string;
+  historicalFeedbacks?: string[]; // Last 3 feedback reports
 }
 
 async function callAI(prompt: string, stage: 1 | 2 | 3, systemInstruction?: string, responseSchema?: any, imageContent?: string, textContent?: string): Promise<string> {
@@ -282,6 +283,7 @@ export async function generateFeedbackReport(data: FeedbackData): Promise<string
     2. 深度：不要只罗列知识点，要描述孩子在课堂上的具体表现细节。
     3. 真实性：体现出老师对孩子的深度观察，提到具体的正确率（如 85%-95% 之间波动）和互动细节。
     4. 逻辑：结构清晰，重点突出。
+    5. 创新性：参考提供的【历史反馈记录】，避免使用完全相同的句式和词汇，在保持风格一致的同时，为本次反馈注入新鲜的描述。
   `;
 
   const prompt = `
@@ -293,6 +295,7 @@ export async function generateFeedbackReport(data: FeedbackData): Promise<string
        - 必须包含：整体学习状态（如“专注投入”、“紧跟节奏”）、对上节课知识的落实复盘（如“作业完成质量高”、“正确率达95%”）、本节课新知识的吸收细节（如“主动思考”、“及时提问”）、具体的正确率评价（参考 80%-95%）、以及对孩子学习习惯的肯定。
     3. 细节描述：描述孩子在面对新知识时的反应（例如：“面对抽象的...知识能主动思考”、“对不熟悉的地方及时批注”）。
     4. 逻辑清晰：分析孩子的薄弱点及后续改进方向。
+    5. 避免重复：参考【历史反馈记录】，确保本次报告的措辞与前几次有所区别，不要机械重复。
 
     输入信息：
     - 学生姓名：${data.studentName}
@@ -301,6 +304,7 @@ export async function generateFeedbackReport(data: FeedbackData): Promise<string
     - 课堂表现标签：${data.performance}
     - 课后作业建议：${data.homework}
     ${data.historicalContext ? `- 历史背景/上节课内容：${data.historicalContext}` : ""}
+    ${data.historicalFeedbacks && data.historicalFeedbacks.length > 0 ? `- 历史反馈记录（参考以避免重复）：\n${data.historicalFeedbacks.map((f, i) => `记录${i + 1}：${f}`).join("\n")}` : ""}
     
     必须严格按照以下格式输出：
     ${data.studentName}化学课后反馈，请查收[愉快]
