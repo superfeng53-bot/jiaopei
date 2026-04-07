@@ -1,20 +1,56 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 化学私教课后反馈生成系统
 
-# Run and deploy your AI Studio app
+这是一个专为化学私教设计的课后反馈生成工具，利用 AI 技术从课件中提取知识点并生成极具亲和力、专业且细致的反馈报告。
 
-This contains everything you need to run your app locally.
+## 核心功能
 
-View your app in AI Studio: https://ai.studio/apps/354e14e0-b74a-494c-9d2f-96e76b261224
+1.  **课件深度分析**：支持 PDF、Word、图片及纯文本课件上传，自动提取知识点并生成精炼的课堂内容汇总。
+2.  **两阶段 AI 处理**：
+    *   **阶段一**：分析课件，提取 8-12 个知识点及 2-3 条核心内容汇总。
+    *   **阶段二**：针对选定知识点生成 4 维度评价、表现标签及作业建议。
+3.  **多模型支持**：支持 Google Gemini、OpenAI、DeepSeek、通义千问 (Qwen)、零一万物 (Yi) 等多种 AI 服务商。
+4.  **高度自定义**：可在设置中配置不同阶段使用的模型、API Key 及 Base URL。
+5.  **风格学习**：AI 生成的反馈报告参考了真实的优秀范例，语气亲切、专业，包含具体的正确率评价和互动细节。
 
-## Run Locally
+## 快速启动
 
-**Prerequisites:**  Node.js
+### 1. 安装依赖
 
+在项目根目录下运行：
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm install
+```
+
+### 2. 启动开发服务器
+
+```bash
+npm run dev
+```
+
+启动后，访问 [http://localhost:3000](http://localhost:3000) 即可使用。
+
+### 3. 配置 AI
+
+1.  打开应用后，点击右上角的 **“设置”** 图标。
+2.  选择您偏好的 **AI 服务商**（如 Google, DeepSeek 等）。
+3.  输入对应的 **API Key**。
+4.  （可选）根据需要修改各个阶段使用的 **模型名称**。
+5.  点击 **“保存配置”**。
+
+## 生产环境构建
+
+```bash
+npm run build
+```
+
+构建产物将存放在 `dist` 目录中。
+
+## 技术栈
+
+*   **前端框架**：React + TypeScript
+*   **样式**：Tailwind CSS
+*   **动画**：Framer Motion
+*   **图标**：Lucide React
+*   **AI 集成**：Google Generative AI SDK + OpenAI 兼容接口
+*   **文件解析**：pdfjs-dist, mammoth

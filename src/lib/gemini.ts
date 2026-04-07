@@ -46,6 +46,8 @@ async function callAI(prompt: string, stage: 1 | 2 | 3, systemInstruction?: stri
   const config = getAIConfig();
   const modelName = stage === 1 ? config.stage1Model : stage === 2 ? config.stage2Model : config.stage3Model;
   
+  console.log(`[AI Stage ${stage}] Using provider: ${config.provider}, model: ${modelName}`);
+
   if (config.provider === 'google') {
     const apiKey = config.apiKey || process.env.GEMINI_API_KEY || '';
     const ai = new GoogleGenAI({ apiKey });
