@@ -1,0 +1,5 @@
+{
+  "name": "AI 课后反馈助手",
+  "description": "帮助老师快速生成个性化、专业且具有针对性的课后反馈。支持上传课件、AI 知识点提取及按钮式快速评价。",
+  "requestFramePermissions": []
+}
