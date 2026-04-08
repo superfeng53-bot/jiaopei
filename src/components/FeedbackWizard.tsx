@@ -352,7 +352,7 @@ export default function FeedbackWizard() {
           onClick={() => setStep('upload')}
           className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          下一步 <ChevronRight className="w-4 h-4" />
+          <span>下一步</span> <ChevronRight className="w-4 h-4" />
         </button>
       </div>
     </div>
@@ -398,7 +398,7 @@ export default function FeedbackWizard() {
           onClick={() => setStep('student')}
           className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold transition-colors"
         >
-          <ChevronLeft className="w-4 h-4" /> 上一步
+          <ChevronLeft className="w-4 h-4" /> <span>上一步</span>
         </button>
       </div>
     </div>
@@ -493,15 +493,15 @@ export default function FeedbackWizard() {
           onClick={() => setStep('upload')}
           className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold transition-colors"
         >
-          <ChevronLeft className="w-4 h-4" /> 上一步
+          <ChevronLeft className="w-4 h-4" /> <span>上一步</span>
         </button>
         <button
           disabled={loading || selectedPointIds.size === 0}
           onClick={handleConfirmPoints}
           className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-          确认并下一步 <ChevronRight className="w-4 h-4" />
+          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+          <span>确认并下一步</span> <ChevronRight className="w-4 h-4" />
         </button>
       </div>
     </div>
@@ -736,7 +736,7 @@ export default function FeedbackWizard() {
             onClick={() => setStep('points')}
             className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-semibold transition-colors"
           >
-            <ChevronLeft className="w-4 h-4" /> 上一步
+            <ChevronLeft className="w-4 h-4" /> <span>上一步</span>
           </button>
           <button
             disabled={loading}
@@ -744,7 +744,7 @@ export default function FeedbackWizard() {
             className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg shadow-blue-200"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-            生成反馈报告
+            <span>生成反馈报告</span>
           </button>
         </div>
       </div>
@@ -860,7 +860,7 @@ export default function FeedbackWizard() {
             }}
             className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all"
           >
-            开始新反馈
+            <span>开始新反馈</span>
           </button>
         </div>
       </div>
