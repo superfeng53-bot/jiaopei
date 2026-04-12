@@ -29,10 +29,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       setConfig({
         ...config,
         provider,
-        baseUrl: option.baseUrl || '',
-        stage1Model: option.defaultModels[0],
-        stage2Model: option.defaultModels[0],
-        stage3Model: option.defaultModels[0],
+        stage1Model: option.recommendedModels.stage1,
+        stage2Model: option.recommendedModels.stage2,
+        stage3Model: option.recommendedModels.stage3,
       });
     }
   };
@@ -94,8 +93,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 </label>
                 <input
                   type="password"
-                  value={config.apiKey}
-                  onChange={e => setConfig({ ...config, apiKey: e.target.value })}
+                  value={config.apiKeys[config.provider] || ''}
+                  onChange={e => setConfig({ 
+                    ...config, 
+                    apiKeys: { ...config.apiKeys, [config.provider]: e.target.value } 
+                  })}
                   placeholder={config.provider === 'google' ? '留空则使用系统默认密钥' : '请输入您的 API Key'}
                   className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                 />
@@ -106,8 +108,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   <label className="text-sm font-bold text-gray-700">API 代理地址 (Base URL)</label>
                   <input
                     type="text"
-                    value={config.baseUrl}
-                    onChange={e => setConfig({ ...config, baseUrl: e.target.value })}
+                    value={config.baseUrls[config.provider] || ''}
+                    onChange={e => setConfig({ 
+                      ...config, 
+                      baseUrls: { ...config.baseUrls, [config.provider]: e.target.value } 
+                    })}
                     placeholder="https://api.example.com/v1"
                     className="w-full p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                   />

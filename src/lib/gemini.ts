@@ -50,7 +50,7 @@ async function callAI(prompt: string, stage: 1 | 2 | 3, systemInstruction?: stri
   console.log(`[AI Stage ${stage}] Using provider: ${config.provider}, model: ${modelName}`);
 
   if (config.provider === 'google') {
-    const apiKey = config.apiKey || process.env.GEMINI_API_KEY || '';
+    const apiKey = config.apiKeys.google || process.env.GEMINI_API_KEY || '';
     const ai = new GoogleGenAI({ apiKey });
     
     const parts: any[] = [{ text: prompt }];
@@ -76,11 +76,12 @@ async function callAI(prompt: string, stage: 1 | 2 | 3, systemInstruction?: stri
     return response.text || "";
   } else {
     // OpenAI compatible providers
-    const apiKey = config.apiKey;
-    const baseUrl = config.baseUrl || (
+    const apiKey = config.apiKeys[config.provider];
+    const baseUrl = config.baseUrls[config.provider] || (
       config.provider === 'deepseek' ? 'https://api.deepseek.com' :
       config.provider === 'qwen' ? 'https://dashscope.aliyuncs.com/compatible-mode/v1' :
-      config.provider === 'yi' ? 'https://api.lingyiwanwu.com/v1' :
+      config.provider === 'doubao' ? 'https://ark.cn-beijing.volces.com/api/v3' :
+      config.provider === 'zhipu' ? 'https://open.bigmodel.cn/api/paas/v4' :
       'https://api.openai.com/v1'
     );
 

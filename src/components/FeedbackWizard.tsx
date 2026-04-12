@@ -65,29 +65,126 @@ const RATINGS = [
 ] as const;
 
 export default function FeedbackWizard() {
-  const [step, setStep] = useState<Step>('student');
+  const [step, setStep] = useState<Step>(() => (localStorage.getItem('wizard_step') as Step) || 'student');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Data State
   const [students, setStudents] = useState<Student[]>(SAMPLE_STUDENTS);
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [customStudentName, setCustomStudentName] = useState('');
-  const [historicalContext, setHistoricalContext] = useState('');
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(() => {
+    const saved = localStorage.getItem('wizard_selected_student');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [customStudentName, setCustomStudentName] = useState(() => localStorage.getItem('wizard_custom_student_name') || '');
+  const [historicalContext, setHistoricalContext] = useState(() => localStorage.getItem('wizard_historical_context') || '');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [fileContent, setFileContent] = useState<{ text: string; isImage: boolean; base64?: string } | null>(null);
-  const [courseSummary, setCourseSummary] = useState('');
-  const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePoint[]>([]);
-  const [selectedPointIds, setSelectedPointIds] = useState<Set<string>>(new Set());
-  const [selectedDimensions, setSelectedDimensions] = useState<Record<string, Set<string>>>({});
-  const [performanceTags, setPerformanceTags] = useState<string[]>([]);
-  const [ratings, setRatings] = useState<Record<string, { aiLevels: number[]; customDimension: string; customLevel: number | null }>>({});
-  const [performance, setPerformance] = useState('专注投入，课堂互动良好');
-  const [homework, setHomework] = useState('完成课后练习，复习本次核心知识点');
-  const [reportVersions, setReportVersions] = useState<string[]>([]);
-  const [currentVersionIndex, setCurrentVersionIndex] = useState(0);
+  const [fileContent, setFileContent] = useState<{ text: string; isImage: boolean; base64?: string } | null>(() => {
+    const saved = localStorage.getItem('wizard_file_content');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [courseSummary, setCourseSummary] = useState(() => localStorage.getItem('wizard_course_summary') || '');
+  const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePoint[]>(() => {
+    const saved = localStorage.getItem('wizard_knowledge_points');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [selectedPointIds, setSelectedPointIds] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('wizard_selected_point_ids');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+  const [selectedDimensions, setSelectedDimensions] = useState<Record<string, Set<string>>>(() => {
+    const saved = localStorage.getItem('wizard_selected_dimensions');
+    if (!saved) return {};
+    const parsed = JSON.parse(saved);
+    const result: Record<string, Set<string>> = {};
+    Object.keys(parsed).forEach(key => {
+      result[key] = new Set(parsed[key]);
+    });
+    return result;
+  });
+  const [performanceTags, setPerformanceTags] = useState<string[]>(() => {
+    const saved = localStorage.getItem('wizard_performance_tags');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [ratings, setRatings] = useState<Record<string, { aiLevels: number[]; customDimension: string; customLevel: number | null }>>(() => {
+    const saved = localStorage.getItem('wizard_ratings');
+    return saved ? JSON.parse(saved) : {};
+  });
+  const [performance, setPerformance] = useState(() => localStorage.getItem('wizard_performance') || '专注投入，课堂互动良好');
+  const [homework, setHomework] = useState(() => localStorage.getItem('wizard_homework') || '完成课后练习，复习本次核心知识点');
+  const [reportVersions, setReportVersions] = useState<string[]>(() => {
+    const saved = localStorage.getItem('wizard_report_versions');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [currentVersionIndex, setCurrentVersionIndex] = useState(() => {
+    const saved = localStorage.getItem('wizard_current_version_index');
+    return saved ? parseInt(saved, 10) : 0;
+  });
   const [copySuccess, setCopySuccess] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+
+  // Persistence Effect
+  React.useEffect(() => {
+    localStorage.setItem('wizard_step', step);
+    localStorage.setItem('wizard_selected_student', JSON.stringify(selectedStudent));
+    localStorage.setItem('wizard_custom_student_name', customStudentName);
+    localStorage.setItem('wizard_historical_context', historicalContext);
+    localStorage.setItem('wizard_file_content', JSON.stringify(fileContent));
+    localStorage.setItem('wizard_course_summary', courseSummary);
+    localStorage.setItem('wizard_knowledge_points', JSON.stringify(knowledgePoints));
+    localStorage.setItem('wizard_selected_point_ids', JSON.stringify(Array.from(selectedPointIds)));
+    
+    const dimsToSave: Record<string, string[]> = {};
+    Object.keys(selectedDimensions).forEach(key => {
+      dimsToSave[key] = Array.from(selectedDimensions[key]);
+    });
+    localStorage.setItem('wizard_selected_dimensions', JSON.stringify(dimsToSave));
+    
+    localStorage.setItem('wizard_performance_tags', JSON.stringify(performanceTags));
+    localStorage.setItem('wizard_ratings', JSON.stringify(ratings));
+    localStorage.setItem('wizard_performance', performance);
+    localStorage.setItem('wizard_homework', homework);
+    localStorage.setItem('wizard_report_versions', JSON.stringify(reportVersions));
+    localStorage.setItem('wizard_current_version_index', currentVersionIndex.toString());
+  }, [
+    step, selectedStudent, customStudentName, historicalContext, fileContent, 
+    courseSummary, knowledgePoints, selectedPointIds, selectedDimensions, 
+    performanceTags, ratings, performance, homework, reportVersions, currentVersionIndex
+  ]);
+
+  const clearState = () => {
+    localStorage.removeItem('wizard_step');
+    localStorage.removeItem('wizard_selected_student');
+    localStorage.removeItem('wizard_custom_student_name');
+    localStorage.removeItem('wizard_historical_context');
+    localStorage.removeItem('wizard_file_content');
+    localStorage.removeItem('wizard_course_summary');
+    localStorage.removeItem('wizard_knowledge_points');
+    localStorage.removeItem('wizard_selected_point_ids');
+    localStorage.removeItem('wizard_selected_dimensions');
+    localStorage.removeItem('wizard_performance_tags');
+    localStorage.removeItem('wizard_ratings');
+    localStorage.removeItem('wizard_performance');
+    localStorage.removeItem('wizard_homework');
+    localStorage.removeItem('wizard_report_versions');
+    localStorage.removeItem('wizard_current_version_index');
+    
+    setStep('student');
+    setSelectedStudent(null);
+    setCustomStudentName('');
+    setHistoricalContext('');
+    setUploadedFile(null);
+    setFileContent(null);
+    setCourseSummary('');
+    setKnowledgePoints([]);
+    setSelectedPointIds(new Set());
+    setSelectedDimensions({});
+    setPerformanceTags([]);
+    setRatings({});
+    setPerformance('专注投入，课堂互动良好');
+    setHomework('完成课后练习，复习本次核心知识点');
+    setReportVersions([]);
+    setCurrentVersionIndex(0);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -850,14 +947,7 @@ export default function FeedbackWizard() {
 
         <div className="flex justify-center">
           <button
-            onClick={() => {
-              setStep('student');
-              setReportVersions([]);
-              setCurrentVersionIndex(0);
-              setRatings({});
-              setKnowledgePoints([]);
-              setUploadedFile(null);
-            }}
+            onClick={clearState}
             className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all"
           >
             <span>开始新反馈</span>
